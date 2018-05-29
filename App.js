@@ -1,8 +1,12 @@
 import { Constants, Camera, FileSystem, Permissions } from 'expo';
 import React from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Slider, Vibration } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, Slider, Vibration, Animated } from 'react-native';
 import GalleryScreen from './GalleryScreen';
 import isIPhoneX from 'react-native-is-iphonex';
+import {
+  PinchGestureHandler,
+  State,
+} from 'react-native-gesture-handler';
 
 const landmarkSize = 2;
 
@@ -38,6 +42,27 @@ export default class CameraScreen extends React.Component {
     faces: [],
     permissionsGranted: false,
   };
+
+  constructor(props) {
+    super(props);
+    this._baseScale = new Animated.Value(1);
+    this._pinchScale = new Animated.Value(1);
+    this._scale = Animated.multiply(this._baseScale, this._pinchScale);
+    this._lastScale = 1;
+    this._onPinchGestureEvent = event => {
+      this._scale = event.nativeEvent.scale;
+
+      this._pinchThreshold = this._lastScale * 0.05;
+
+      if (this._scale > (this._lastScale + this._pinchThreshold)) {
+        this.zoomIn();
+        this._lastScale = this._scale;
+      } else if (this._scale < (this._lastScale - this._pinchThreshold)) {
+        this.zoomOut();
+        this._lastScale = this._scale;
+      }
+    };
+  }
 
   async componentWillMount() {
     const { status } = await Permissions.askAsync(Permissions.CAMERA);
@@ -93,13 +118,13 @@ export default class CameraScreen extends React.Component {
 
   zoomOut() {
     this.setState({
-      zoom: this.state.zoom - 0.1 < 0 ? 0 : this.state.zoom - 0.1,
+      zoom: this.state.zoom - 0.05 < 0 ? 0 : this.state.zoom - 0.05,
     });
   }
 
   zoomIn() {
     this.setState({
-      zoom: this.state.zoom + 0.1 > 1 ? 1 : this.state.zoom + 0.1,
+      zoom: this.state.zoom + 0.05 > 1 ? 1 : this.state.zoom + 0.05,
     });
   }
 
@@ -214,94 +239,98 @@ export default class CameraScreen extends React.Component {
 
   renderCamera() {
     return (
-      <Camera
-        ref={ref => {
-          this.camera = ref;
-        }}
-        style={{
-          flex: 1,
-        }}
-        type={this.state.type}
-        flashMode={this.state.flash}
-        autoFocus={this.state.autoFocus}
-        zoom={this.state.zoom}
-        whiteBalance={this.state.whiteBalance}
-        ratio={this.state.ratio}
-        faceDetectionLandmarks={Camera.Constants.FaceDetection.Landmarks.all}
-        onFacesDetected={this.onFacesDetected}
-        onFaceDetectionError={this.onFaceDetectionError}
-        focusDepth={this.state.depth}>
-        <View
+      <PinchGestureHandler
+        id="image_pinch"
+        onGestureEvent={this._onPinchGestureEvent}>
+        <Camera
+          ref={ref => {
+            this.camera = ref;
+          }}
           style={{
-            flex: 0.5,
-            backgroundColor: 'transparent',
-            flexDirection: 'row',
-            justifyContent: 'space-around',
-            paddingTop: Constants.statusBarHeight / 2,
-          }}>
-          <TouchableOpacity style={styles.flipButton} onPress={this.toggleFacing.bind(this)}>
-            <Text style={styles.flipText}> FLIP </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.flipButton} onPress={this.toggleFlash.bind(this)}>
-            <Text style={styles.flipText}> FLASH: {this.state.flash} </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.flipButton} onPress={this.toggleWB.bind(this)}>
-            <Text style={styles.flipText}> WB: {this.state.whiteBalance} </Text>
-          </TouchableOpacity>
-        </View>
-        <View
-          style={{
-            flex: 0.4,
-            backgroundColor: 'transparent',
-            flexDirection: 'row',
-            alignSelf: 'flex-end',
-            marginBottom: -5,
-          }}>
-          {this.state.autoFocus !== 'on' ? (
-            <Slider
-              style={{ width: 150, marginTop: 15, marginRight: 15, alignSelf: 'flex-end' }}
-              onValueChange={this.setFocusDepth.bind(this)}
-              step={0.1}
-            />
-          ) : null}
-        </View>
-        <View
-          style={{
-            flex: 0.1,
-            paddingBottom: isIPhoneX ? 20 : 0,
-            backgroundColor: 'transparent',
-            flexDirection: 'row',
-            alignSelf: 'flex-end',
-          }}>
-          <TouchableOpacity
-            style={[styles.flipButton, { flex: 0.1, alignSelf: 'flex-end' }]}
-            onPress={this.zoomIn.bind(this)}>
-            <Text style={styles.flipText}> + </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.flipButton, { flex: 0.1, alignSelf: 'flex-end' }]}
-            onPress={this.zoomOut.bind(this)}>
-            <Text style={styles.flipText}> - </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.flipButton, { flex: 0.25, alignSelf: 'flex-end' }]}
-            onPress={this.toggleFocus.bind(this)}>
-            <Text style={styles.flipText}> AF : {this.state.autoFocus} </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.flipButton, styles.picButton, { flex: 0.3, alignSelf: 'flex-end' }]}
-            onPress={this.takePicture.bind(this)}>
-            <Text style={styles.flipText}> SNAP </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.flipButton, styles.galleryButton, { flex: 0.25, alignSelf: 'flex-end' }]}
-            onPress={this.toggleView.bind(this)}>
-            <Text style={styles.flipText}> Gallery </Text>
-          </TouchableOpacity>
-        </View>
-        {this.renderFaces()}
-        {this.renderLandmarks()}
-      </Camera>
+            flex: 1,
+          }}
+          type={this.state.type}
+          flashMode={this.state.flash}
+          autoFocus={this.state.autoFocus}
+          zoom={this.state.zoom}
+          whiteBalance={this.state.whiteBalance}
+          ratio={this.state.ratio}
+          faceDetectionLandmarks={Camera.Constants.FaceDetection.Landmarks.all}
+          onFacesDetected={this.onFacesDetected}
+          onFaceDetectionError={this.onFaceDetectionError}
+          focusDepth={this.state.depth}>
+          <View
+            style={{
+              flex: 0.5,
+              backgroundColor: 'transparent',
+              flexDirection: 'row',
+              justifyContent: 'space-around',
+              paddingTop: Constants.statusBarHeight / 2,
+            }}>
+            <TouchableOpacity style={styles.flipButton} onPress={this.toggleFacing.bind(this)}>
+              <Text style={styles.flipText}> FLIP </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.flipButton} onPress={this.toggleFlash.bind(this)}>
+              <Text style={styles.flipText}> FLASH: {this.state.flash} </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.flipButton} onPress={this.toggleWB.bind(this)}>
+              <Text style={styles.flipText}> WB: {this.state.whiteBalance} </Text>
+            </TouchableOpacity>
+          </View>
+          <View
+            style={{
+              flex: 0.4,
+              backgroundColor: 'transparent',
+              flexDirection: 'row',
+              alignSelf: 'flex-end',
+              marginBottom: -5,
+            }}>
+            {this.state.autoFocus !== 'on' ? (
+              <Slider
+                style={{ width: 150, marginTop: 15, marginRight: 15, alignSelf: 'flex-end' }}
+                onValueChange={this.setFocusDepth.bind(this)}
+                step={0.1}
+              />
+            ) : null}
+          </View>
+          <View
+            style={{
+              flex: 0.1,
+              paddingBottom: isIPhoneX ? 20 : 0,
+              backgroundColor: 'transparent',
+              flexDirection: 'row',
+              alignSelf: 'flex-end',
+            }}>
+            <TouchableOpacity
+              style={[styles.flipButton, { flex: 0.1, alignSelf: 'flex-end' }]}
+              onPress={this.zoomIn.bind(this)}>
+              <Text style={styles.flipText}> + </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.flipButton, { flex: 0.1, alignSelf: 'flex-end' }]}
+              onPress={this.zoomOut.bind(this)}>
+              <Text style={styles.flipText}> - </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.flipButton, { flex: 0.25, alignSelf: 'flex-end' }]}
+              onPress={this.toggleFocus.bind(this)}>
+              <Text style={styles.flipText}> AF : {this.state.autoFocus} </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.flipButton, styles.picButton, { flex: 0.3, alignSelf: 'flex-end' }]}
+              onPress={this.takePicture.bind(this)}>
+              <Text style={styles.flipText}> SNAP </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.flipButton, styles.galleryButton, { flex: 0.25, alignSelf: 'flex-end' }]}
+              onPress={this.toggleView.bind(this)}>
+              <Text style={styles.flipText}> Gallery </Text>
+            </TouchableOpacity>
+          </View>
+          {this.renderFaces()}
+          {this.renderLandmarks()}
+        </Camera>
+      </PinchGestureHandler>
     );
   }
 
